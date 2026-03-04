@@ -94,12 +94,23 @@ Behaviour:
 			cfg, _ := config.Load()
 
 			// Resolve Groq API key: flag > env var > config file
+			// keySource is printed (masked) on every review run to aid debugging.
+			var keySource string
 			resolvedKey := groqKey
+			if resolvedKey != "" {
+				keySource = "flag (-k)"
+			}
 			if resolvedKey == "" {
 				resolvedKey = os.Getenv("GROQ_API_KEY")
+				if resolvedKey != "" {
+					keySource = "env var (GROQ_API_KEY)"
+				}
 			}
 			if resolvedKey == "" && cfg != nil {
 				resolvedKey = cfg.GroqKey
+				if resolvedKey != "" {
+					keySource = "config file"
+				}
 			}
 			if resolvedKey == "" {
 				return fmt.Errorf(
@@ -109,6 +120,7 @@ Behaviour:
 						"  Flag:        lr -r -k gsk_... -b main feature/x",
 				)
 			}
+			fmt.Fprintf(c.out, "Using API key from %s: %s\n", keySource, maskKey(resolvedKey))
 
 			// Resolve standards path: flag > config file > default
 			resolvedStandards := standardsPath
@@ -283,6 +295,56 @@ Supported keys:
 		},
 	}
 
-	configCmd.AddCommand(setCmd, getCmd, listCmd, unsetCmd)
+	verifyCmd := &cobra.Command{
+		Use:   "verify",
+		Short: "Show which value will be used for each setting and from which source",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+
+			path, _ := config.FilePath()
+			fmt.Fprintf(c.out, "Config file: %s\n\n", path)
+
+			// groq-key
+			key, src := "", ""
+			if v := os.Getenv("GROQ_API_KEY"); v != "" {
+				key, src = v, "env var (GROQ_API_KEY)  ← overrides config file!"
+			} else if cfg != nil && cfg.GroqKey != "" {
+				key, src = cfg.GroqKey, "config file"
+			} else {
+				src = "(not set)"
+			}
+			if key != "" {
+				fmt.Fprintf(c.out, "groq-key  : %s  [%s]\n", maskKey(key), src)
+			} else {
+				fmt.Fprintf(c.out, "groq-key  : (not set)  [%s]\n", src)
+			}
+
+			// standards
+			std, stdSrc := "", ""
+			if cfg != nil && cfg.Standards != "" {
+				std, stdSrc = cfg.Standards, "config file"
+			} else {
+				std, stdSrc = "CODING_STANDARDS.md", "default"
+			}
+			fmt.Fprintf(c.out, "standards : %s  [%s]\n", std, stdSrc)
+
+			return nil
+		},
+	}
+
+	configCmd.AddCommand(setCmd, getCmd, listCmd, unsetCmd, verifyCmd)
 	return configCmd
+}
+
+// maskKey returns the first 8 characters of a key followed by *** to avoid
+// logging the full secret while still making the key recognisable for debugging.
+func maskKey(key string) string {
+	if len(key) <= 8 {
+		return "***"
+	}
+	return key[:8] + "***"
 }
