@@ -10,7 +10,6 @@ import (
 	"local_review/internal/app"
 	"local_review/internal/config"
 	"local_review/internal/domain"
-	"local_review/internal/infra/checker"
 	"local_review/internal/infra/git"
 	"local_review/internal/infra/llm"
 
@@ -130,11 +129,10 @@ Behaviour:
 
 			// Wire infrastructure
 			gitClient := git.NewClient()
-			checkRunner := checker.NewRunner()
 			llmClient := llm.NewGroqClient(resolvedKey, "")
 
 			// Build engine
-			engine := app.NewReviewEngine(gitClient, checkRunner, llmClient, c.out)
+			engine := app.NewReviewEngine(gitClient, llmClient, c.out)
 
 			targetBranch := args[0]
 			req := domain.ReviewRequest{

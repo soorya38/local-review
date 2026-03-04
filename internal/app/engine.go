@@ -13,16 +13,14 @@ import (
 // It relies entirely on interfaces to enforce Clean Architecture boundaries
 // and ensure business logic remains isolated from framework-specific code.
 type ReviewEngine struct {
-	git     domain.GitProvider
-	checker domain.StaticChecker
-	llm     domain.LLMClient
-	out     io.Writer
+	git domain.GitProvider
+	llm domain.LLMClient
+	out io.Writer
 }
 
 // NewReviewEngine initializes the core evaluation engine with necessary dependencies.
 func NewReviewEngine(
 	git domain.GitProvider,
-	checker domain.StaticChecker,
 	llm domain.LLMClient,
 	out io.Writer,
 ) *ReviewEngine {
@@ -30,18 +28,16 @@ func NewReviewEngine(
 		out = os.Stdout
 	}
 	return &ReviewEngine{
-		git:     git,
-		checker: checker,
-		llm:     llm,
-		out:     out,
+		git: git,
+		llm: llm,
+		out: out,
 	}
 }
 
-// Run executes the complete, deterministic-first review pipeline.
+// Run executes the review pipeline:
 // 1. Validates structural and repository preconditions.
-// 2. Executes deterministic static checks.
-// 3. Generates the patch diff.
-// 4. Invokes the LLM iff all prior tests pass.
+// 2. Generates the patch diff.
+// 3. Invokes the LLM for semantic review.
 func (e *ReviewEngine) Run(ctx context.Context, req domain.ReviewRequest) (*domain.ReviewReport, error) {
 	fmt.Fprintf(e.out, "Starting local review for base: '%s' vs target: '%s'\n", req.BaseBranch, req.TargetBranch)
 
@@ -50,21 +46,7 @@ func (e *ReviewEngine) Run(ctx context.Context, req domain.ReviewRequest) (*doma
 		return nil, fmt.Errorf("branch validation failed: %w", err)
 	}
 
-	// Step 2: Deterministic code checks
-	fmt.Fprintln(e.out, "Running deterministic checks...")
-	checkResults, err := e.checker.RunChecks(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute static checks: %w", err)
-	}
-
-	for _, res := range checkResults {
-		if !res.Success {
-			return nil, fmt.Errorf("deterministic check '%s' failed. Review aborted.\nOutput:\n%s", res.Name, res.Output)
-		}
-	}
-	fmt.Fprintln(e.out, "All deterministic checks passed successfully.")
-
-	// Step 3: Extract Diff
+	// Step 2: Extract Diff
 	fmt.Fprintln(e.out, "Extracting git diff...")
 	diffContent, err := e.generateDiff(ctx, req)
 	if err != nil {
@@ -80,7 +62,7 @@ func (e *ReviewEngine) Run(ctx context.Context, req domain.ReviewRequest) (*doma
 		}, nil
 	}
 
-	// Step 4: LLM Invocation
+	// Step 3: LLM Invocation
 	fmt.Fprintln(e.out, "Invoking LLM for semantic review...")
 
 	report, err := e.llm.Review(ctx, diffContent, req.Standards)
