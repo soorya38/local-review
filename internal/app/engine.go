@@ -83,14 +83,7 @@ func (e *ReviewEngine) Run(ctx context.Context, req domain.ReviewRequest) (*doma
 	// Step 4: LLM Invocation
 	fmt.Fprintln(e.out, "Invoking LLM for semantic review...")
 
-	// Normally this would be loaded from CODING_STANDARDS.md via an injected FileProvider or directly read.
-	// For simplicity, we assume the standards are read here or by the CLI and passed in.
-	// We'll read it here directly assuming it's in the current working directory,
-	// or we can just pass an empty string knowing the Mock handles it.
-	// A proper implementation would inject this content. Let's read it directly to satisfy the exact requirement that it's sent.
-	standards, _ := os.ReadFile("CODING_STANDARDS.md")
-
-	report, err := e.llm.Review(ctx, diffContent, string(standards))
+	report, err := e.llm.Review(ctx, diffContent, req.Standards)
 	if err != nil {
 		return nil, fmt.Errorf("LLM review failed: %w", err)
 	}

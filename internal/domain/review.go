@@ -8,6 +8,9 @@ type ReviewRequest struct {
 	BaseBranch   string
 	TargetBranch string
 	StrictMode   bool
+	// Standards holds the raw content of the coding-standards file.
+	// It is populated by the CLI layer and forwarded verbatim to the LLM.
+	Standards string
 }
 
 // CheckResult represents the outcome of a single deterministic check.

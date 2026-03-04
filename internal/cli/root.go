@@ -33,6 +33,7 @@ func (c *CLI) Execute(ctx context.Context) error {
 	var baseBranch string
 	var doReview bool
 	var groqKey string
+	var standardsPath string
 
 	rootCmd := &cobra.Command{
 		Use:   "lr --branch <base-branch> <target-branch>",
@@ -47,6 +48,7 @@ Arguments:
 Flags:
   -r, --review                 trigger a branch-to-branch review
   -k, --groq-key <api-key>     Groq API key (overrides GROQ_API_KEY env var)
+  -s, --standards <path>       path to coding standards file (default: CODING_STANDARDS.md)
 
 Behaviour:
   If you are already on <base-branch>, lr runs:
@@ -58,6 +60,7 @@ Behaviour:
   lr --branch develop feature/my-branch
   lr -r -b main feature/my-branch
   lr -r -k gsk_xxx -b main feature/my-branch
+  lr -r -s ./standards/CUSTOM.md -b main feature/my-branch
   GROQ_API_KEY=gsk_xxx lr -r -b main feature/my-branch`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -79,6 +82,14 @@ Behaviour:
 				)
 			}
 
+			// Read coding standards file (best-effort; empty string is acceptable).
+			var standards string
+			if raw, err := os.ReadFile(standardsPath); err == nil {
+				standards = string(raw)
+			} else {
+				fmt.Fprintf(c.out, "Warning: could not read standards file %q: %v\n", standardsPath, err)
+			}
+
 			// Wire infrastructure
 			gitClient := git.NewClient()
 			checkRunner := checker.NewRunner()
@@ -92,6 +103,7 @@ Behaviour:
 				BaseBranch:   baseBranch,
 				TargetBranch: targetBranch,
 				StrictMode:   true,
+				Standards:    standards,
 			}
 
 			report, err := engine.Run(cmd.Context(), req)
@@ -116,6 +128,7 @@ Behaviour:
 	rootCmd.Flags().StringVarP(&baseBranch, "branch", "b", "", "Base branch to compare from (required)")
 	rootCmd.Flags().BoolVarP(&doReview, "review", "r", false, "Trigger branch-to-branch review")
 	rootCmd.Flags().StringVarP(&groqKey, "groq-key", "k", "", "Groq API key (overrides GROQ_API_KEY env var)")
+	rootCmd.Flags().StringVarP(&standardsPath, "standards", "s", "CODING_STANDARDS.md", "Path to coding standards file sent to the LLM")
 	_ = rootCmd.MarkFlagRequired("branch")
 
 	rootCmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
